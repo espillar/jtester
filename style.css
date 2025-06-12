@@ -1,0 +1,85 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    padding-top: 20px;
+}
+
+.app-container {
+    width: 90%;
+    max-width: 1200px;
+}
+
+.input-area {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#card-text-input {
+    padding: 8px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    width: calc(100% - 120px); /* Adjust based on button width */
+}
+
+#add-card-button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#add-card-button:hover {
+    background-color: #0056b3;
+}
+
+.columns-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+.column {
+    width: 32%; /* Slightly less than 33.33% to account for potential margins/paddings */
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
+    min-height: 400px; /* Give some initial height */
+    overflow-y: auto; /* In case of many cards */
+}
+
+.column h2 {
+    text-align: center;
+    color: #333;
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.card {
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.card:hover {
+    background-color: #dde2e6;
+}
+
+.card.selected {
+    background-color: #007bff;
+    color: white;
+    border-color: #0056b3;
+}

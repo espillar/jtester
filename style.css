@@ -72,6 +72,34 @@ body {
     background-color: #c82333;
 }
 
+/* New Save Board button styling */
+#save-board-button {
+    padding: 8px 15px;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    background-color: #ffc107; /* Amber/Yellow */
+}
+#save-board-button:hover {
+    background-color: #e0a800;
+}
+
+/* Styling for the Load Board label to make it look like a button */
+#load-board-label.button-like-label {
+    padding: 8px 15px;
+    color: white;
+    background-color: #6c757d; /* Gray */
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-block; /* To allow padding and behave like a button */
+    text-align: center;
+}
+#load-board-label.button-like-label:hover {
+    background-color: #5a6268;
+}
+
 .columns-container {
     display: flex;
     justify-content: space-between;

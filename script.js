@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteCardButton = document.getElementById('delete-card-button');
     const copyCardButton = document.getElementById('copy-card-button');
     const pasteCardButton = document.getElementById('paste-card-button');
+    const saveBoardButton = document.getElementById('save-board-button');
+    const loadBoardInput = document.getElementById('load-board-input');
 
     // --- FUNCTIONS ---
 
@@ -171,6 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteCardButton.addEventListener('click', handleDeleteSelected);
     copyCardButton.addEventListener('click', handleCopySelected);
     pasteCardButton.addEventListener('click', handlePasteCachedCard);
+    saveBoardButton.addEventListener('click', handleSaveBoard);
+    loadBoardInput.addEventListener('change', handleLoadBoard);
 
     // --- INITIALIZATION ---
     renderCards(column1El, column1CardIds);
@@ -464,5 +468,171 @@ function handlePasteCachedCard() {
         renderCards(targetColumnElement, column1CardIds);
     }
     console.log('[PasteDebug] Paste operation complete. newMainCard ID:', newMainCard.id, 'pasted.');
+}
+
+
+/**
+* Handles the "Save Board" button click.
+* Gathers current board state and triggers a JSON file download.
+*/
+function handleSaveBoard() {
+    console.log('[SaveLoadDebug] handleSaveBoard called.');
+    try {
+        const boardState = {
+            allCardsData: allCards, // The main object storing all card details
+            rootCardIds: column1CardIds, // Array of IDs for cards in the first column
+            nextIdToUse: nextCardId // Store the next ID to maintain continuity
+        };
+
+        const jsonString = JSON.stringify(boardState, null, 2); // null, 2 for pretty printing
+
+        // Create a blob from the JSON string
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        // Create a temporary anchor element to trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'hierarchical-board.json'; // Suggested filename
+        document.body.appendChild(a); // Append to body to make it clickable
+        a.click();
+
+        // Clean up: remove anchor and revoke object URL
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log('[SaveLoadDebug] Board saved successfully.');
+        // alert("Board saved successfully!"); // Optional user feedback
+
+    } catch (error) {
+        console.error('[SaveLoadDebug] Error saving board:', error);
+        alert("Error saving board. See console for details.");
+    }
+}
+
+
+/**
+* Clears all current board data and resets selections.
+*/
+function clearBoardForLoad() {
+    allCards = {};
+    column1CardIds = [];
+    selectedCol1CardId = null;
+    selectedCol2CardId = null;
+    selectedCol3CardId = null;
+    cachedCardStructure = null; // Clear any copied card data
+    // nextCardId will be set by the loaded data or determined after load.
+
+    // Clear visual columns
+    column1El.innerHTML = '<h2>Column 1</h2>'; // Or use clearAndRenderColumn if titles are dynamic
+    column2El.innerHTML = '<h2>Column 2</h2>';
+    column3El.innerHTML = '<h2>Column 3</h2>';
+    console.log('[SaveLoadDebug] Board cleared for loading new data.');
+}
+
+/**
+* Determines the next card ID to use based on loaded data.
+* Iterates all card IDs in allCardsData and finds the maximum.
+* @param {object} allCardsData - The object containing all loaded card data.
+* @returns {number} The next ID to use (max existing ID + 1, or 1 if no cards).
+*/
+function determineNextIdFromData(allCardsData) {
+    let maxId = 0;
+    if (allCardsData && typeof allCardsData === 'object') { // Check if allCardsData is valid
+        for (const cardIdStr in allCardsData) {
+            if (Object.prototype.hasOwnProperty.call(allCardsData, cardIdStr)) {
+                const cardId = parseInt(cardIdStr, 10);
+                if (!isNaN(cardId) && cardId > maxId) {
+                    maxId = cardId;
+                }
+            }
+        }
+    }
+    return maxId + 1;
+}
+
+
+/**
+* Handles the file selection for loading a board.
+* @param {Event} event - The file input change event.
+*/
+function handleLoadBoard(event) {
+    console.log('[SaveLoadDebug] handleLoadBoard called.');
+    const file = event.target.files[0];
+    if (!file) {
+        console.log('[SaveLoadDebug] No file selected.');
+        return;
+    }
+
+    if (file.type !== "application/json") {
+        alert("Invalid file type. Please select a JSON file.");
+        console.warn('[SaveLoadDebug] Invalid file type:', file.type);
+        event.target.value = null; // Reset file input
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        try {
+            const jsonString = e.target.result;
+            console.log('[SaveLoadDebug] File content read.');
+            const parsedState = JSON.parse(jsonString);
+            console.log('[SaveLoadDebug] JSON parsed successfully.');
+
+            // Basic validation of the loaded data structure
+            if (!parsedState || typeof parsedState.allCardsData !== 'object' ||
+                !Array.isArray(parsedState.rootCardIds) ||
+                typeof parsedState.nextIdToUse !== 'number') {
+                alert("Invalid board file format.");
+                console.error('[SaveLoadDebug] Invalid board file format after parsing:', parsedState);
+                event.target.value = null; // Reset file input
+                return;
+            }
+
+            clearBoardForLoad(); // Clear existing board
+
+            // Restore board state
+            allCards = parsedState.allCardsData;
+            column1CardIds = parsedState.rootCardIds;
+
+            // Robustly set nextCardId
+            if (typeof parsedState.nextIdToUse === 'number' && parsedState.nextIdToUse > 0) {
+                nextCardId = parsedState.nextIdToUse;
+            } else {
+                console.warn('[SaveLoadDebug] nextIdToUse not found or invalid in JSON. Calculating from loaded cards.');
+                nextCardId = determineNextIdFromData(allCards); // Use allCards here as it's now populated
+            }
+
+            console.log('[SaveLoadDebug] Board state restored from file.');
+            console.log('[SaveLoadDebug] Restored allCards count:', Object.keys(allCards).length);
+            console.log('[SaveLoadDebug] Restored column1CardIds:', column1CardIds);
+            console.log('[SaveLoadDebug] Restored nextCardId:', nextCardId);
+
+
+            // Re-render the board
+            renderCards(column1El, column1CardIds);
+            // Ensure other columns are also cleared properly (clearAndRenderColumn does this with titles)
+            clearAndRenderColumn(column2El, []);
+            clearAndRenderColumn(column3El, []);
+
+            alert("Board loaded successfully!");
+            console.log('[SaveLoadDebug] Board re-rendered.');
+
+        } catch (error) {
+            console.error('[SaveLoadDebug] Error processing loaded file:', error);
+            alert("Error loading board file. It might be corrupted or not a valid board JSON. See console for details.");
+        } finally {
+             event.target.value = null; // Reset file input so user can load same file again if needed
+        }
+    };
+
+    reader.onerror = (e) => {
+        console.error('[SaveLoadDebug] FileReader error:', e);
+        alert("Error reading file.");
+        event.target.value = null; // Reset file input
+    };
+
+    reader.readAsText(file); // Read the file
 }
 });

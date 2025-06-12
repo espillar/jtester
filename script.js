@@ -1,3 +1,6 @@
+// --- CONSTANTS ---
+const LOCAL_STORAGE_KEY = 'hierarchicalBoardData'; // Define the key
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- DATA ---
     let allCards = {}; // Store all cards by ID for easy lookup
@@ -19,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pasteCardButton = document.getElementById('paste-card-button');
     const saveBoardButton = document.getElementById('save-board-button');
     const loadBoardInput = document.getElementById('load-board-input');
+    const clearStorageButton = document.getElementById('clear-storage-button');
 
     // --- FUNCTIONS ---
 
@@ -161,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCards(column1El, column1CardIds);
         }
         cardTextInput.value = '';
+        saveBoardToLocalStorage(); // Auto-save
     }
 
     // --- EVENT LISTENERS ---
@@ -175,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pasteCardButton.addEventListener('click', handlePasteCachedCard);
     saveBoardButton.addEventListener('click', handleSaveBoard);
     loadBoardInput.addEventListener('change', handleLoadBoard);
+    clearStorageButton.addEventListener('click', handleClearLocalStorage);
 
     // --- INITIALIZATION ---
     renderCards(column1El, column1CardIds);
@@ -356,6 +362,7 @@ function copyCardStructure(cardId) {
                 const parentCard = getCard(parentOfDeletedCardId); // parentOfDeletedCardId is selectedCol2CardId
                 renderCards(column3El, parentCard ? parentCard.children : []);
             }
+            saveBoardToLocalStorage(); // Auto-save
         }
     }
 
@@ -468,6 +475,7 @@ function handlePasteCachedCard() {
         renderCards(targetColumnElement, column1CardIds);
     }
     console.log('[PasteDebug] Paste operation complete. newMainCard ID:', newMainCard.id, 'pasted.');
+    saveBoardToLocalStorage(); // Auto-save
 }
 
 
@@ -521,13 +529,22 @@ function clearBoardForLoad() {
     selectedCol2CardId = null;
     selectedCol3CardId = null;
     cachedCardStructure = null; // Clear any copied card data
-    // nextCardId will be set by the loaded data or determined after load.
+    nextCardId = 1; // Reset nextCardId to its initial starting value
 
-    // Clear visual columns
-    column1El.innerHTML = '<h2>Column 1</h2>'; // Or use clearAndRenderColumn if titles are dynamic
+    // Clear visual columns - it's better to use clearAndRenderColumn if available
+    // to ensure titles are consistently handled (assuming they are static or set by clearAndRenderColumn)
+    // However, if clearAndRenderColumn itself relies on some of the just-cleared state
+    // in complex ways, direct innerHTML manipulation for titles might be safer here.
+    // Given current clearAndRenderColumn, it should be safe:
+    // clearAndRenderColumn(column1El, []); // This will also add the H2 title
+    // clearAndRenderColumn(column2El, []);
+    // clearAndRenderColumn(column3El, []);
+    // Let's stick to what was likely there from file load for visual clearing:
+    column1El.innerHTML = '<h2>Column 1</h2>';
     column2El.innerHTML = '<h2>Column 2</h2>';
     column3El.innerHTML = '<h2>Column 3</h2>';
-    console.log('[SaveLoadDebug] Board cleared for loading new data.');
+
+    console.log('[SaveLoadDebug/LocalStorageDebug] Board cleared. nextCardId reset to 1.');
 }
 
 /**
@@ -634,5 +651,123 @@ function handleLoadBoard(event) {
     };
 
     reader.readAsText(file); // Read the file
+}
+
+/**
+ * Saves the current board state to localStorage.
+ */
+function saveBoardToLocalStorage() {
+    console.log('[LocalStorageDebug] Attempting to save board to localStorage.');
+    try {
+        const boardState = {
+            allCardsData: allCards,
+            rootCardIds: column1CardIds,
+            nextIdToUse: nextCardId
+        };
+        const jsonString = JSON.stringify(boardState); // No need for pretty print in localStorage
+        localStorage.setItem(LOCAL_STORAGE_KEY, jsonString);
+        console.log('[LocalStorageDebug] Board saved to localStorage successfully.');
+    } catch (error) {
+        console.error('[LocalStorageDebug] Error saving board to localStorage:', error);
+        // Consider if user should be alerted, e.g., if quota is exceeded.
+        // For now, just console error. Users might not expect alerts on auto-save.
+    }
+}
+
+/**
+ * Loads the board state from localStorage if data exists.
+ */
+function loadBoardFromLocalStorage() {
+    console.log('[LocalStorageDebug] Attempting to load board from localStorage.');
+    const jsonString = localStorage.getItem(LOCAL_STORAGE_KEY);
+
+    if (jsonString) {
+        console.log('[LocalStorageDebug] Found data in localStorage.');
+        try {
+            const parsedState = JSON.parse(jsonString);
+            console.log('[LocalStorageDebug] Successfully parsed data from localStorage.');
+
+            // Basic validation
+            if (!parsedState || typeof parsedState.allCardsData !== 'object' ||
+                !Array.isArray(parsedState.rootCardIds) ||
+                (typeof parsedState.nextIdToUse !== 'number' && typeof parsedState.nextIdToUse !== 'undefined') // Allow undefined for fallback
+               ) {
+                console.error('[LocalStorageDebug] Invalid board data format in localStorage.', parsedState);
+                localStorage.removeItem(LOCAL_STORAGE_KEY); // Remove corrupted data
+                alert("Found invalid saved data, starting fresh. (Old data cleared from local storage)");
+                // No need to call clearBoardForLoad here as it will start fresh by default
+                return; // Exit if format is invalid
+            }
+
+            clearBoardForLoad(); // Clear any default/existing state (important if this were called other than startup)
+
+            allCards = parsedState.allCardsData;
+            column1CardIds = parsedState.rootCardIds;
+
+            // Robustly set nextCardId (using existing helper if available, or direct logic)
+            if (typeof parsedState.nextIdToUse === 'number' && parsedState.nextIdToUse > 0) {
+                nextCardId = parsedState.nextIdToUse;
+            } else {
+                console.warn('[LocalStorageDebug] nextIdToUse not found or invalid in localStorage. Calculating from loaded cards.');
+                // Assuming determineNextIdFromData is available from previous file load implementation
+                nextCardId = determineNextIdFromData(allCards);
+            }
+
+            console.log('[LocalStorageDebug] Board state restored from localStorage.');
+            console.log('[LocalStorageDebug] Restored allCards count:', Object.keys(allCards).length);
+            console.log('[LocalStorageDebug] Restored column1CardIds:', column1CardIds);
+            console.log('[LocalStorageDebug] Restored nextCardId:', nextCardId);
+
+
+            // Re-render the board
+            renderCards(column1El, column1CardIds);
+            clearAndRenderColumn(column2El, []); // Ensure other columns are cleared properly
+            clearAndRenderColumn(column3El, []);
+
+            console.log('[LocalStorageDebug] Board re-rendered from localStorage data.');
+            // alert("Board loaded from previous session!"); // Optional user feedback
+
+        } catch (error) {
+            console.error('[LocalStorageDebug] Error parsing or processing data from localStorage:', error);
+            localStorage.removeItem(LOCAL_STORAGE_KEY); // Remove corrupted data
+            alert("Error loading saved data, starting fresh. (Corrupted data cleared from local storage)");
+            // No need to call clearBoardForLoad here as it will start fresh by default
+        }
+    } else {
+        console.log('[LocalStorageDebug] No board data found in localStorage. Starting fresh.');
+        // If no data, ensure board is in a clean initial state (though it should be by default)
+        renderCards(column1El, column1CardIds); // Render empty col1 (or initial state)
+        clearAndRenderColumn(column2El, []);
+        clearAndRenderColumn(column3El, []);
+    }
+}
+
+/**
+ * Handles the "Clear Saved Data" button click.
+ * Removes board data from localStorage and resets the current board.
+ */
+function handleClearLocalStorage() {
+    console.log('[LocalStorageDebug] handleClearLocalStorage called.');
+    if (confirm("Are you sure you want to clear all locally saved board data? This cannot be undone.")) {
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            console.log('[LocalStorageDebug] Data removed from localStorage.');
+
+            clearBoardForLoad(); // Reset all current board variables
+
+            // Re-render the now empty board
+            renderCards(column1El, column1CardIds); // column1CardIds is now []
+            clearAndRenderColumn(column2El, []);    // These ensure titles are kept if clearBoardForLoad doesn't do it
+            clearAndRenderColumn(column3El, []);
+
+            alert("Locally saved board data has been cleared. The board is now reset.");
+            // No need to call saveBoardToLocalStorage() here, as we want it cleared.
+        } catch (error) {
+            console.error('[LocalStorageDebug] Error clearing localStorage:', error);
+            alert("An error occurred while trying to clear saved data. See console for details.");
+        }
+    } else {
+        console.log('[LocalStorageDebug] Clear localStorage operation cancelled by user.');
+    }
 }
 });

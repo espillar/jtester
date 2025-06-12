@@ -18,27 +18,58 @@ body {
     background-color: #fff;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex; /* Use flexbox */
+    flex-wrap: wrap; /* Allow wrapping if not enough space */
+    gap: 10px; /* Adds space between items, including input and buttons */
 }
 
 #card-text-input {
+    flex-grow: 1; /* Allow input to take available space */
     padding: 8px;
-    margin-right: 10px;
     border: 1px solid #ddd;
     border-radius: 3px;
-    width: calc(100% - 120px); /* Adjust based on button width */
+    min-width: 200px; /* Minimum width before it wraps or shrinks too much */
 }
 
-#add-card-button {
+#add-card-button,
+#copy-card-button,
+#paste-card-button,
+#delete-card-button {
     padding: 8px 15px;
-    background-color: #007bff;
+    /* background-color: #007bff; */ /* Base color handled by specific IDs */
     color: white;
     border: none;
     border-radius: 3px;
     cursor: pointer;
+    /* margin-left: 5px; Remove this if using gap */
 }
 
+#add-card-button {
+    background-color: #007bff;
+}
 #add-card-button:hover {
     background-color: #0056b3;
+}
+
+#copy-card-button {
+    background-color: #17a2b8; /* Teal */
+}
+#copy-card-button:hover {
+    background-color: #138496;
+}
+
+#paste-card-button {
+    background-color: #28a745; /* Green */
+}
+#paste-card-button:hover {
+    background-color: #218838;
+}
+
+#delete-card-button {
+    background-color: #dc3545; /* Red */
+}
+#delete-card-button:hover {
+    background-color: #c82333;
 }
 
 .columns-container {

@@ -224,58 +224,75 @@ document.addEventListener('DOMContentLoaded', () => {
     * @param {number} cardId - The ID of the card to copy.
     * @returns {object | null} A simplified structure of the copied card or null if not found.
     */
-    function copyCardStructure(cardId) {
-        const originalCard = getCard(cardId);
-        if (!originalCard) {
-            return null;
-        }
+function copyCardStructure(cardId) {
+    console.log('[CopyDebug] Attempting to copy structure for card ID:', cardId);
+    const originalCard = getCard(cardId);
 
-        // Create a copy of the main card's text
-        const copiedStructure = {
-            text: originalCard.text,
-            children: [] // We'll store simplified children here
-        };
-
-        // Copy direct children's text
-        if (originalCard.children && originalCard.children.length > 0) {
-            originalCard.children.forEach(childId => {
-                const childCard = getCard(childId);
-                if (childCard) {
-                    copiedStructure.children.push({ text: childCard.text });
-                    // Note: We are not copying grandchildren or their structure here.
-                    // This simplifies the paste operation significantly.
-                    // To copy the full subtree, this function and pasting would need to be recursive.
-                }
-            });
-        }
-        return copiedStructure;
+    if (!originalCard) {
+        console.error('[CopyDebug] Original card not found for ID:', cardId);
+        return null;
     }
+    console.log('[CopyDebug] Original card data:', JSON.parse(JSON.stringify(originalCard))); // Deep copy for logging
+
+    // Create a copy of the main card's text
+    const copiedStructure = {
+        text: originalCard.text, // Make sure originalCard.text is valid
+        children: []
+    };
+    console.log('[CopyDebug] Copied main card text:', originalCard.text);
+
+    // Copy direct children's text
+    if (originalCard.children && originalCard.children.length > 0) {
+        console.log('[CopyDebug] Original card has children IDs:', originalCard.children); // Keep log
+        originalCard.children.forEach(childId => {
+            const childCard = getCard(childId);
+            if (childCard) {
+                // CRITICAL LINE FOR THE FIX: Ensure this line creates an OBJECT with a 'text' property
+                copiedStructure.children.push({ text: childCard.text });
+                console.log('[CopyDebug] Processing child ID:', childId, 'Text:', childCard.text, 'Pushed to copiedStructure.children'); // Keep log
+            } else {
+                console.warn('[CopyDebug] Child card not found for ID:', childId); // Keep log
+            }
+        });
+    } else {
+        console.log('[CopyDebug] Original card has no children.'); // Keep log
+    }
+    console.log('[CopyDebug] Final copiedStructure (before return):', JSON.parse(JSON.stringify(copiedStructure)));
+    return copiedStructure;
+}
 
     /**
     * Handles the "Copy Selected" button click.
     */
     function handleCopySelected() {
-        let cardIdToCopy = null;
-        if (selectedCol2CardId !== null) {
-            cardIdToCopy = selectedCol2CardId;
-        } else if (selectedCol1CardId !== null) {
-            cardIdToCopy = selectedCol1CardId;
-        } else {
-            alert("No card selected to copy.");
-            return;
-        }
+    console.log('[CopyDebug] handleCopySelected called.');
+    let cardIdToCopy = null;
+    if (selectedCol3CardId !== null) {
+        cardIdToCopy = selectedCol3CardId;
+        console.log('[CopyDebug] Selected card for copy is from Column 3, ID:', cardIdToCopy);
+    } else if (selectedCol2CardId !== null) {
+        cardIdToCopy = selectedCol2CardId;
+        console.log('[CopyDebug] Selected card for copy is from Column 2, ID:', cardIdToCopy);
+    } else if (selectedCol1CardId !== null) {
+        cardIdToCopy = selectedCol1CardId;
+        console.log('[CopyDebug] Selected card for copy is from Column 1, ID:', cardIdToCopy);
+    } else {
+        alert("No card selected to copy.");
+        console.log('[CopyDebug] No card selected to copy.');
+        return;
+    }
 
-        if (cardIdToCopy !== null) {
-            cachedCardStructure = copyCardStructure(cardIdToCopy);
-            if (cachedCardStructure) {
-                // Simple feedback; could be a more visible UI element
-                console.log("Card structure copied to cache:", cachedCardStructure);
-                alert("Selected card copied!");
-            } else {
-                alert("Failed to copy card structure.");
-            }
+    if (cardIdToCopy !== null) {
+        cachedCardStructure = copyCardStructure(cardIdToCopy); // This calls the instrumented function
+        if (cachedCardStructure) {
+            console.log('[CopyDebug] Card structure COPIED to global cachedCardStructure:', JSON.parse(JSON.stringify(cachedCardStructure)));
+            alert("Selected card copied! (Check console for details)");
+        } else {
+            alert("Failed to copy card structure.");
+            console.error('[CopyDebug] Failed to copy card structure, cachedCardStructure is null.');
         }
     }
+}
 
     /**
      * Handles the "Delete Selected" button click.
@@ -343,87 +360,109 @@ document.addEventListener('DOMContentLoaded', () => {
     * Handles the "Paste Cached Card" button click.
     */
 function handlePasteCachedCard() {
+    console.log('[PasteDebug] handlePasteCachedCard called.');
     if (!cachedCardStructure) {
         alert("Nothing to paste. Copy a card first.");
+        console.log('[PasteDebug] cachedCardStructure is null or empty. Aborting paste.');
         return;
     }
 
+    console.log('[PasteDebug] Using cachedCardStructure:', JSON.parse(JSON.stringify(cachedCardStructure)));
+
     // Create the main new card object from the cached text
-    const newMainCard = createCardObject(cachedCardStructure.text); // Adds to allCards, returns the card object
+    console.log('[PasteDebug] Text for main new card from cache:', cachedCardStructure.text);
+    const newMainCard = createCardObject(cachedCardStructure.text); // createCardObject adds to allCards and returns the card object
+    if (!newMainCard || !newMainCard.id) {
+        console.error('[PasteDebug] Failed to create newMainCard or it has no ID. Aborting.');
+        return;
+    }
+    console.log('[PasteDebug] Created newMainCard ID:', newMainCard.id, 'Text:', newMainCard.text);
+
 
     // Paste its cached children as actual children of this newMainCard in the data model
-    // These children will appear in the next column when newMainCard is selected.
     if (cachedCardStructure.children && cachedCardStructure.children.length > 0) {
-        cachedCardStructure.children.forEach(childTextObj => {
-            const newChildCard = createCardObject(childTextObj.text); // Creates child, adds to allCards
-            newMainCard.children.push(newChildCard.id); // newMainCard now has these as children
+        console.log('[PasteDebug] cachedCardStructure has children. Processing them.'); // Keep log
+        cachedCardStructure.children.forEach((childTextObj, index) => {
+            console.log(`[PasteDebug] Processing cached child #${index + 1}. Object from cache:`, JSON.parse(JSON.stringify(childTextObj))); // Log the whole object
+            if (typeof childTextObj.text === 'undefined') {
+                 console.warn(`[PasteDebug] childTextObj.text IS UNDEFINED for child #${index + 1}.`);
+            }
+            // CRITICAL LINE FOR THE FIX: Ensure this line correctly reads 'childTextObj.text'
+            const newChildCard = createCardObject(childTextObj.text);
+            // ... rest of child processing logic ...
+            if (!newChildCard || !newChildCard.id) {
+                console.error(`[PasteDebug] Failed to create newChildCard for cached child #${index + 1} or it has no ID.`);
+                return;
+            }
+            newMainCard.children.push(newChildCard.id);
+            console.log(`[PasteDebug] Created newChildCard ID: ${newChildCard.id}, Text: ${newChildCard.text}. Added to newMainCard's children.`); // Keep log
         });
+    } else {
+        console.log('[PasteDebug] cachedCardStructure has no children.'); // Keep log
     }
 
-    let targetColumnElement = null; // To know which column to re-render
+    console.log('[PasteDebug] newMainCard after processing children:', JSON.parse(JSON.stringify(newMainCard)));
+
+    let targetColumnElement = null;
+    let parentForPastedCard = null; // For logging
 
     // Determine where to paste (as sibling)
-    if (selectedCol3CardId !== null) { // Paste after selected card in Column 3
-        const parentCol2Card = getCard(selectedCol2CardId);
-        if (parentCol2Card && parentCol2Card.children) {
-            const selectedIndex = parentCol2Card.children.indexOf(selectedCol3CardId);
+    if (selectedCol3CardId !== null) {
+        console.log('[PasteDebug] Mode: Paste after selected card in Column 3. Selected ID:', selectedCol3CardId);
+        parentForPastedCard = selectedCol2CardId ? getCard(selectedCol2CardId) : null;
+        if (parentForPastedCard && parentForPastedCard.children) {
+            const selectedIndex = parentForPastedCard.children.indexOf(selectedCol3CardId);
+            console.log(`[PasteDebug] Parent for Col3 paste is Col2 card ID: ${selectedCol2CardId}. Selected index in parent's children: ${selectedIndex}`);
             if (selectedIndex > -1) {
-                parentCol2Card.children.splice(selectedIndex + 1, 0, newMainCard.id);
-            } else { // Should not happen if selectedCol3CardId is valid child
-                parentCol2Card.children.push(newMainCard.id);
+                parentForPastedCard.children.splice(selectedIndex + 1, 0, newMainCard.id);
+            } else {
+                console.warn('[PasteDebug] Selected Col3 card not found in parent Col2 card children. Appending to end.');
+                parentForPastedCard.children.push(newMainCard.id);
             }
             targetColumnElement = column3El;
-            renderCards(targetColumnElement, parentCol2Card.children);
-        } else { // No valid parent for Col3 selected card (e.g. parent just deleted) - add to end of Col2 parent's children list or handle error
-            alert("Error: Parent for Column 3 card not found. Pasting might be incomplete.");
-            // Fallback or error: for safety, maybe try to add to end of column 2 if selectedCol2CardId exists
-            if(selectedCol2CardId) {
-                 const fallbackParent = getCard(selectedCol2CardId);
-                 if(fallbackParent) {
-                    fallbackParent.children.push(newMainCard.id);
-                    renderCards(column3El, fallbackParent.children);
-                 }
-            }
+            renderCards(targetColumnElement, parentForPastedCard.children);
+        } else {
+            alert("Error: Parent for Column 3 card not found or invalid. Pasting might be incomplete.");
+            console.error('[PasteDebug] Parent for Column 3 card (Col2 ID:', selectedCol2CardId, ') not found or has no children array.');
             return;
         }
-    } else if (selectedCol2CardId !== null) { // Paste after selected card in Column 2
-        const parentCol1Card = getCard(selectedCol1CardId);
-        if (parentCol1Card && parentCol1Card.children) {
-            const selectedIndex = parentCol1Card.children.indexOf(selectedCol2CardId);
+    } else if (selectedCol2CardId !== null) {
+        console.log('[PasteDebug] Mode: Paste after selected card in Column 2. Selected ID:', selectedCol2CardId);
+        parentForPastedCard = selectedCol1CardId ? getCard(selectedCol1CardId) : null;
+        if (parentForPastedCard && parentForPastedCard.children) {
+            const selectedIndex = parentForPastedCard.children.indexOf(selectedCol2CardId);
+            console.log(`[PasteDebug] Parent for Col2 paste is Col1 card ID: ${selectedCol1CardId}. Selected index in parent's children: ${selectedIndex}`);
             if (selectedIndex > -1) {
-                parentCol1Card.children.splice(selectedIndex + 1, 0, newMainCard.id);
+                parentForPastedCard.children.splice(selectedIndex + 1, 0, newMainCard.id);
             } else {
-                parentCol1Card.children.push(newMainCard.id);
+                console.warn('[PasteDebug] Selected Col2 card not found in parent Col1 card children. Appending to end.');
+                parentForPastedCard.children.push(newMainCard.id);
             }
             targetColumnElement = column2El;
-            renderCards(targetColumnElement, parentCol1Card.children);
+            renderCards(targetColumnElement, parentForPastedCard.children);
         } else {
-             alert("Error: Parent for Column 2 card not found. Pasting might be incomplete.");
-             if(selectedCol1CardId) {
-                 const fallbackParent = getCard(selectedCol1CardId);
-                 if(fallbackParent) {
-                    fallbackParent.children.push(newMainCard.id);
-                    renderCards(column2El, fallbackParent.children);
-                 }
-             }
+             alert("Error: Parent for Column 2 card not found or invalid. Pasting might be incomplete.");
+             console.error('[PasteDebug] Parent for Column 2 card (Col1 ID:', selectedCol1CardId, ') not found or has no children array.');
             return;
         }
-    } else if (selectedCol1CardId !== null) { // Paste after selected card in Column 1
+    } else if (selectedCol1CardId !== null) {
+        console.log('[PasteDebug] Mode: Paste after selected card in Column 1. Selected ID:', selectedCol1CardId);
         const selectedIndex = column1CardIds.indexOf(selectedCol1CardId);
+        console.log(`[PasteDebug] Target is Column 1. Selected index in column1CardIds: ${selectedIndex}`);
         if (selectedIndex > -1) {
             column1CardIds.splice(selectedIndex + 1, 0, newMainCard.id);
         } else {
-            column1CardIds.push(newMainCard.id); // Fallback if ID not found (should not happen)
+            console.warn('[PasteDebug] Selected Col1 card not found in column1CardIds. Appending to end.');
+            column1CardIds.push(newMainCard.id);
         }
         targetColumnElement = column1El;
         renderCards(targetColumnElement, column1CardIds);
-    } else { // No card selected, paste as the last card in Column 1
+    } else {
+        console.log('[PasteDebug] Mode: No card selected, paste as the last card in Column 1.');
         column1CardIds.push(newMainCard.id);
         targetColumnElement = column1El;
         renderCards(targetColumnElement, column1CardIds);
     }
-    // Optional: Clear cache? For now, allow multiple pastes.
-    // cachedCardStructure = null;
-    // alert("Card pasted!");
+    console.log('[PasteDebug] Paste operation complete. newMainCard ID:', newMainCard.id, 'pasted.');
 }
 });

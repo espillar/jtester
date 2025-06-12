@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let nextCardId = 1;
     let selectedCol1CardId = null;
     let selectedCol2CardId = null;
+    let selectedCol3CardId = null; // Added for column 3 selection
     let cachedCardStructure = null; // To store the copied card structure
 
     // --- DOM ELEMENTS ---
@@ -53,12 +54,15 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (columnElement === column2El) columnNumber = 2;
             else if (columnElement === column3El) columnNumber = 3;
 
-            if (columnNumber === 1 || columnNumber === 2) {
-                 cardDiv.addEventListener('click', () => handleCardSelection(card.id, columnNumber));
-            }
+           // Allow selection in all columns for now, actions will be context-dependent
+           if (columnNumber) { // Simplified: if it's a column we know, allow selection click
+               cardDiv.addEventListener('click', () => handleCardSelection(card.id, columnNumber));
+           }
 
+            // Highlight selected card
             if ((columnNumber === 1 && card.id === selectedCol1CardId) ||
-                (columnNumber === 2 && card.id === selectedCol2CardId)) {
+                (columnNumber === 2 && card.id === selectedCol2CardId) ||
+                (columnNumber === 3 && card.id === selectedCol3CardId)) {
                 cardDiv.classList.add('selected');
             }
 
@@ -68,35 +72,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleCardSelection(cardId, columnNumber) {
         if (columnNumber === 1) {
-            if (selectedCol1CardId === cardId) { // Deselect if clicking the same card in col1
+            if (selectedCol1CardId === cardId) { // Deselecting
                 selectedCol1CardId = null;
                 selectedCol2CardId = null;
+                selectedCol3CardId = null; // Clear all subsequent selections
                 clearAndRenderColumn(column2El, []);
                 clearAndRenderColumn(column3El, []);
             } else {
                 selectedCol1CardId = cardId;
-                selectedCol2CardId = null;
+                selectedCol2CardId = null; // Clear subsequent selections
+                selectedCol3CardId = null;
                 const parentCard = getCard(cardId);
                 clearAndRenderColumn(column2El, parentCard ? parentCard.children : []);
                 clearAndRenderColumn(column3El, []);
             }
-            renderCards(column1El, column1CardIds);
+            renderCards(column1El, column1CardIds); // Re-render col1 for selection styles
+            // Col2 and Col3 are cleared and re-rendered by clearAndRenderColumn
 
         } else if (columnNumber === 2) {
-            if (selectedCol2CardId === cardId) {
+            if (selectedCol2CardId === cardId) { // Deselecting
                 selectedCol2CardId = null;
+                selectedCol3CardId = null; // Clear subsequent selections
                 clearAndRenderColumn(column3El, []);
             } else {
                 selectedCol2CardId = cardId;
+                selectedCol3CardId = null; // Clear subsequent selections
                 const parentCard = getCard(cardId);
                 clearAndRenderColumn(column3El, parentCard ? parentCard.children : []);
             }
-
+            // Re-render column 2 to update its own selection styles
             if (selectedCol1CardId) {
                 const col1ParentCard = getCard(selectedCol1CardId);
                 renderCards(column2El, col1ParentCard ? col1ParentCard.children : []);
             } else {
-                renderCards(column2El, []);
+                renderCards(column2El, []); // Should not happen if Col2 card is selected
+            }
+            // Col3 is cleared/re-rendered by clearAndRenderColumn
+
+        } else if (columnNumber === 3) {
+            if (selectedCol3CardId === cardId) { // Deselecting
+                selectedCol3CardId = null;
+            } else {
+                selectedCol3CardId = cardId;
+                // No further columns to populate from Col 3 selection
+            }
+            // Re-render column 3 to update its own selection styles
+            if (selectedCol2CardId) {
+                const col2ParentCard = getCard(selectedCol2CardId);
+                renderCards(column3El, col2ParentCard ? col2ParentCard.children : []);
+            } else {
+                renderCards(column3El, []); // Should not happen if Col3 card is selected
             }
         }
     }
@@ -257,20 +282,27 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function handleDeleteSelected() {
         let cardIdToDelete = null;
-        let parentOfDeletedCardId = null; // To help re-render the correct column
+        let parentOfDeletedCardId = null;
         let deletedFromColumnNumber = 0;
 
-        if (selectedCol2CardId !== null) {
+        // Prioritize deletion from the furthest column with a selection
+        if (selectedCol3CardId !== null) {
+            cardIdToDelete = selectedCol3CardId;
+            parentOfDeletedCardId = selectedCol2CardId; // Parent is in Col 2
+            deletedFromColumnNumber = 3;
+            if (selectedCol2CardId) { // Ensure parent exists before trying to remove child
+                removeChildFromParent(selectedCol2CardId, cardIdToDelete);
+            }
+        } else if (selectedCol2CardId !== null) {
             cardIdToDelete = selectedCol2CardId;
             parentOfDeletedCardId = selectedCol1CardId; // Parent is in Col 1
             deletedFromColumnNumber = 2;
-            // Remove from parent (selectedCol1CardId)'s children list
-            if (selectedCol1CardId) {
+            if (selectedCol1CardId) { // Ensure parent exists
                 removeChildFromParent(selectedCol1CardId, cardIdToDelete);
             }
         } else if (selectedCol1CardId !== null) {
             cardIdToDelete = selectedCol1CardId;
-            // No explicit parent in allCards, it's a root card for column 1
+            // No explicit parent in allCards data structure for Col1 cards
             deletedFromColumnNumber = 1;
             const index = column1CardIds.indexOf(cardIdToDelete);
             if (index > -1) {
@@ -282,21 +314,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (cardIdToDelete !== null) {
-            deleteCardDataRecursive(cardIdToDelete); // Delete the card and all its descendants from allCards
+            deleteCardDataRecursive(cardIdToDelete); // This recursively deletes from allCards
 
-            // Clear selections
+            // Clear selections and re-render
             if (deletedFromColumnNumber === 1) {
                 selectedCol1CardId = null;
-                selectedCol2CardId = null; // Also clear col2 if col1 card is deleted
+                selectedCol2CardId = null;
+                selectedCol3CardId = null;
                 renderCards(column1El, column1CardIds);
-                clearAndRenderColumn(column2El, []);
+                clearAndRenderColumn(column2El, []); // Clear and render to remove old content
                 clearAndRenderColumn(column3El, []);
             } else if (deletedFromColumnNumber === 2) {
                 selectedCol2CardId = null;
-                // Re-render column 2 (children of selectedCol1CardId)
-                const parentCard = getCard(parentOfDeletedCardId);
+                selectedCol3CardId = null;
+                const parentCard = getCard(parentOfDeletedCardId); // parentOfDeletedCardId is selectedCol1CardId
                 renderCards(column2El, parentCard ? parentCard.children : []);
-                clearAndRenderColumn(column3El, []); // Clear column 3
+                clearAndRenderColumn(column3El, []);
+            } else if (deletedFromColumnNumber === 3) {
+                selectedCol3CardId = null;
+                const parentCard = getCard(parentOfDeletedCardId); // parentOfDeletedCardId is selectedCol2CardId
+                renderCards(column3El, parentCard ? parentCard.children : []);
             }
         }
     }
@@ -305,50 +342,88 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
     * Handles the "Paste Cached Card" button click.
     */
-    function handlePasteCachedCard() {
-        if (!cachedCardStructure) {
-            alert("Nothing to paste. Copy a card first.");
+function handlePasteCachedCard() {
+    if (!cachedCardStructure) {
+        alert("Nothing to paste. Copy a card first.");
+        return;
+    }
+
+    // Create the main new card object from the cached text
+    const newMainCard = createCardObject(cachedCardStructure.text); // Adds to allCards, returns the card object
+
+    // Paste its cached children as actual children of this newMainCard in the data model
+    // These children will appear in the next column when newMainCard is selected.
+    if (cachedCardStructure.children && cachedCardStructure.children.length > 0) {
+        cachedCardStructure.children.forEach(childTextObj => {
+            const newChildCard = createCardObject(childTextObj.text); // Creates child, adds to allCards
+            newMainCard.children.push(newChildCard.id); // newMainCard now has these as children
+        });
+    }
+
+    let targetColumnElement = null; // To know which column to re-render
+
+    // Determine where to paste (as sibling)
+    if (selectedCol3CardId !== null) { // Paste after selected card in Column 3
+        const parentCol2Card = getCard(selectedCol2CardId);
+        if (parentCol2Card && parentCol2Card.children) {
+            const selectedIndex = parentCol2Card.children.indexOf(selectedCol3CardId);
+            if (selectedIndex > -1) {
+                parentCol2Card.children.splice(selectedIndex + 1, 0, newMainCard.id);
+            } else { // Should not happen if selectedCol3CardId is valid child
+                parentCol2Card.children.push(newMainCard.id);
+            }
+            targetColumnElement = column3El;
+            renderCards(targetColumnElement, parentCol2Card.children);
+        } else { // No valid parent for Col3 selected card (e.g. parent just deleted) - add to end of Col2 parent's children list or handle error
+            alert("Error: Parent for Column 3 card not found. Pasting might be incomplete.");
+            // Fallback or error: for safety, maybe try to add to end of column 2 if selectedCol2CardId exists
+            if(selectedCol2CardId) {
+                 const fallbackParent = getCard(selectedCol2CardId);
+                 if(fallbackParent) {
+                    fallbackParent.children.push(newMainCard.id);
+                    renderCards(column3El, fallbackParent.children);
+                 }
+            }
             return;
         }
-
-        // Create the main pasted card
-        const newMainCard = createCardObject(cachedCardStructure.text); // createCardObject adds to allCards and returns the card
-
-        // Determine where to paste and add children if any
-        if (selectedCol2CardId !== null) { // Paste as child of selected Col2 card (into Col3)
-            const parentCard = getCard(selectedCol2CardId);
-            if (parentCard) {
-                parentCard.children.push(newMainCard.id);
-                // Add children from cache to the newMainCard (these will be in Col3, children of newMainCard)
-                cachedCardStructure.children.forEach(childTextObj => {
-                    const newChildCard = createCardObject(childTextObj.text);
-                    newMainCard.children.push(newChildCard.id);
-                });
-                renderCards(column3El, parentCard.children); // Re-render Col3 showing newMainCard
+    } else if (selectedCol2CardId !== null) { // Paste after selected card in Column 2
+        const parentCol1Card = getCard(selectedCol1CardId);
+        if (parentCol1Card && parentCol1Card.children) {
+            const selectedIndex = parentCol1Card.children.indexOf(selectedCol2CardId);
+            if (selectedIndex > -1) {
+                parentCol1Card.children.splice(selectedIndex + 1, 0, newMainCard.id);
+            } else {
+                parentCol1Card.children.push(newMainCard.id);
             }
-        } else if (selectedCol1CardId !== null) { // Paste as child of selected Col1 card (into Col2)
-            const parentCard = getCard(selectedCol1CardId);
-            if (parentCard) {
-                parentCard.children.push(newMainCard.id);
-                // Add children from cache to the newMainCard (these will be in Col2, children of newMainCard)
-                cachedCardStructure.children.forEach(childTextObj => {
-                    const newChildCard = createCardObject(childTextObj.text);
-                    newMainCard.children.push(newChildCard.id);
-                });
-                renderCards(column2El, parentCard.children); // Re-render Col2 showing newMainCard
-            }
-        } else { // Paste into Column 1
-            column1CardIds.push(newMainCard.id);
-            // Add children from cache to the newMainCard
-            cachedCardStructure.children.forEach(childTextObj => {
-                const newChildCard = createCardObject(childTextObj.text);
-                newMainCard.children.push(newChildCard.id);
-            });
-            renderCards(column1El, column1CardIds); // Re-render Col1
+            targetColumnElement = column2El;
+            renderCards(targetColumnElement, parentCol1Card.children);
+        } else {
+             alert("Error: Parent for Column 2 card not found. Pasting might be incomplete.");
+             if(selectedCol1CardId) {
+                 const fallbackParent = getCard(selectedCol1CardId);
+                 if(fallbackParent) {
+                    fallbackParent.children.push(newMainCard.id);
+                    renderCards(column2El, fallbackParent.children);
+                 }
+             }
+            return;
         }
-
-        // Optional: Clear cache after paste? For now, let's allow multiple pastes.
-        // cachedCardStructure = null;
-        // alert("Card pasted!");
+    } else if (selectedCol1CardId !== null) { // Paste after selected card in Column 1
+        const selectedIndex = column1CardIds.indexOf(selectedCol1CardId);
+        if (selectedIndex > -1) {
+            column1CardIds.splice(selectedIndex + 1, 0, newMainCard.id);
+        } else {
+            column1CardIds.push(newMainCard.id); // Fallback if ID not found (should not happen)
+        }
+        targetColumnElement = column1El;
+        renderCards(targetColumnElement, column1CardIds);
+    } else { // No card selected, paste as the last card in Column 1
+        column1CardIds.push(newMainCard.id);
+        targetColumnElement = column1El;
+        renderCards(targetColumnElement, column1CardIds);
     }
+    // Optional: Clear cache? For now, allow multiple pastes.
+    // cachedCardStructure = null;
+    // alert("Card pasted!");
+}
 });
